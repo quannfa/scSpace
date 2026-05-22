@@ -40,7 +40,66 @@
 - 可视化对比：重现 `half_split_benchmark/evaluation` 中的关键图表（距离分布图、assignment scatter、pseudo-space 可视化），并将数值与基线 JSON 比较（例如 `evaluation_metrics.json`）。
 - 回归测试：在小规模合成数据上建立端到端测试，确保修改不会破坏主流程。
 
-**7 交付物与文档**
-- 更新 `design.md`（本文件）说明核心设计。
-- 在 `_l_result/` 下保存示例运行结果与评估报告。
-- 在 `README.md` 中增加快速入门与复现实验的最小命令集合。
+**6 实现路线（Implementation Roadmap）**
+
+### 6.1 环境初始化
+- 创建 `xeniu_scspace/pyproject.toml`，声明 `xeniu-scspace` 包及依赖（scspace、t20260507-xenium-dataset、scanpy、anndata、pandas、numpy、matplotlib、scikit-learn、scipy、tqdm、pyyaml）
+- 在根目录 `pyproject.toml` 的 `[tool.uv.sources]` 中添加 `xeniu-scspace` 本地路径引用
+- 执行 `uv sync` 补全虚拟环境，确认包可导入
+
+### 6.2 核心模块实现
+
+**bundle.py**
+- `ScSpaceBundlePaths`：数据类，包含 `sc_data_path`, `sc_meta_path`, `st_data_path`, `st_meta_path`, `output_dir`
+- `bundle_files(sc_adata, st_adata, output_dir, prefix)`：从两个 AnnData 对象写出四个 CSV 文件（sc_data、sc_meta、st_data、st_meta）
+- `validate_bundle(bundle)`：检查四个文件是否存在、行列对齐、索引匹配
+
+**pipeline.py**
+- `prepare_from_xenium(xenium_sample_dir, output_dir, st_type, **kwargs)`：调用 `trans_sc.convert_xenium_to_scrna` 生成 sc-like h5ad，可选调用 `trans_visium.convert_xenium_to_visium`，再用 `bundle_files()` 导出 CSV bundle
+- `run_scspace_pipeline(bundle_dir, output_dir, st_type, **pipeline_args)`：加载 bundle → scSpace 预处理 → `construct_pseudo_space` → `spatial_cluster` → 保存结果 CSV
+- `prepare(sc_counts, sc_meta, st_counts, st_meta, output_dir, bin_size, min_cells_per_bin)`：直接接受 DataFrame 聚合生成 bundle
+
+**cli.py**
+- 使用 `argparse` 构建子命令解析器
+- `prepare` 子命令：支持 `--from-xenium` 或 `--sc-data/--sc-meta/--st-data/--st-meta` 模式
+- `run` 子命令：接收 `--bundle-dir`, `--output-dir`, `--st-type` 及流水线超参数
+- 在 `pyproject.toml` 中通过 `[project.scripts]` 注册 `xenium-scspace` 入口点
+
+**advanced_analysis.py**
+- `evaluate_pseudo_space(sc_adata, ground_truth_key)`：计算 ARI/NMI
+- `plot_pseudo_space(sc_adata, output_dir)`：生成伪空间散点图、聚类对比图
+- `benchmark_compare(results_dir, baseline_json)`：与基线比较数值偏差
+
+### 6.3 测试
+- 创建 `tests/` 目录，包含 `__init__.py`、`test_bundle.py`、`test_pipeline.py`
+- 使用小规模合成数据测试端到端流程
+- 验证 bundle 写入、读取、校验逻辑
+
+### 6.4 集成与运行
+- 通过 CLI 执行 `xenium-scspace prepare --from-xenium` 和 `xenium-scspace run` 验证完整流程
+- 在 `_l_result/` 下保存示例运行结果
+
+**7 交付物与文档（Deliverables & Documentation）**
+
+- **代码包**：`xenium_scspace/` 下的五个模块（`__init__.py`, `bundle.py`, `pipeline.py`, `cli.py`, `advanced_analysis.py`）
+- **测试套件**：`tests/` 下的单元测试和集成测试
+- **设计文档**：本文件（`design.md`），说明核心架构和实现路线
+- **README**：在 `xeniu_scspace/README.md` 中提供快速入门指南，包含环境搭建、示例命令、参数说明
+- **运行结果**：示例运行结果保存在 `_l_result/` 下，包含评估报告和可视化图表
+- **环境快照**：`uv.lock` 锁定所有依赖版本，确保可复现
+
+**8 提交与版本管理（Submission & Version Control）**
+
+- 所有变更通过 Git 管理，提交到 `master` 分支
+- 提交信息规范：`feat(xeniu-scspace): <描述>` 格式
+- 示例提交信息：
+  ```
+  feat(xeniu-scspace): add Xenium→scSpace pipeline package
+
+  - Complete design.md with implementation roadmap & submission plan
+  - Create xenium_scspace package skeleton (bundle, pipeline, cli, analysis)
+  - Add unit tests for bundle and pipeline modules
+  - Write README with quickstart guide
+  - Set up pyproject.toml and uv sync environment
+  ```
+- 提交步骤：`git add -A` → `git commit -m "<message>"` → `git push origin master`

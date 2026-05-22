@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+_l_result/
+.vscode/
+*.egg-info/
+.agents_tmp/
