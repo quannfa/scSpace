@@ -1,0 +1,24 @@
+[project]
+name = "scspace"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "igraph>=0.10.2",
+    "leidenalg>=0.9.0",
+    "matplotlib>=3.6.3",
+    "numpy>=1.23.4",
+    "pandas>=1.5.0",
+    "scikit-misc>=0.3.1,<0.4",
+    "scikit-learn>=1.1.2",
+    "scipy>=1.9.2",
+    "torch>=2.11.0",
+    "t20260507-xenium-dataset",
+]
+
+[tool.uv.extra-build-dependencies]
+leidenalg = ["cmake"]
+
+[tool.uv.sources]
+t20260507-xenium-dataset = { path = "../../t20260507_xenium_dataset", editable = true }
