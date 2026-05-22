@@ -8,9 +8,6 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
-from scSpace.utils import load_data, preporcess
-from scSpace.scspace import construct_pseudo_space, spatial_cluster
-
 from .bundle import ScSpaceBundlePaths, bundle_files
 
 
@@ -20,35 +17,24 @@ def prepare_from_xenium(
     st_type: str = "spot",
     **kwargs,
 ) -> ScSpaceBundlePaths:
-    """Convert Xenium sample output to scSpace-ready bundle.
+    """Convert Xenium sample output to scSpace-ready bundle."""
+    import xenium.trans_sc as _trans_sc
+    import xenium.trans_visium as _trans_visium
 
-    Parameters
-    ----------
-    xenium_sample_dir
-        Path to Xenium sample output directory (``*_outs``).
-    output_dir
-        Directory to write bundle CSV files into.
-    st_type
-        Spatial transcriptomics type (``"spot"`` or ``"image"``).
-    **kwargs
-        Passed through to conversion functions.
-
-    Returns
-    -------
-    ScSpaceBundlePaths for the generated bundle.
-    """
-    from t20260507_xenium_dataset.xenium.trans_sc import convert_xenium_to_scrna
-    from t20260507_xenium_dataset.xenium.trans_visium import convert_xenium_to_visium
+    # Patch esypro‑derived OUTPUT_ROOT with a real Path so mkdir() works
+    _scratch = output_dir / ".scratch"
+    _trans_sc.OUTPUT_ROOT = _scratch / "scrna"
+    _trans_visium.OUTPUT_ROOT = _scratch / "visium"
 
     sample_dir = Path(xenium_sample_dir)
 
     # Build sc-like h5ad
-    sc_output = convert_xenium_to_scrna(sample_dir)
+    sc_output = _trans_sc.convert_xenium_to_scrna(sample_dir, **kwargs)
     sc_h5ad = sc_output / "xenium_scrna.h5ad"
     sc_adata = ad.read_h5ad(sc_h5ad)
 
     # Build st-like h5ad
-    st_output = convert_xenium_to_visium(sample_dir)
+    st_output = _trans_visium.convert_xenium_to_visium(sample_dir, **kwargs)
     st_h5ad = st_output / "xenium_visium.h5ad"
     st_adata = ad.read_h5ad(st_h5ad)
 
@@ -83,31 +69,10 @@ def run_scspace_pipeline(
     target_num: int | None = None,
     random_seed: int = 123,
 ) -> dict:
-    """Run the full scSpace pipeline on a bundle directory.
+    """Run the full scSpace pipeline on a bundle directory."""
+    from scSpace.utils import load_data, preporcess
+    from scSpace.scspace import construct_pseudo_space, spatial_cluster
 
-    Parameters
-    ----------
-    bundle_dir
-        Directory containing the four CSV bundle files.
-    output_dir
-        Directory to write results into.
-    st_type
-        ST data type (``"spot"`` or ``"image"``).
-    n_features
-        Number of highly-variable genes to select.
-    normalize
-        Whether to normalize data.
-    kernel_type, dim, lamb, gamma
-        TCA kernel parameters.
-    batch_size, hidden_size, common_size, activation, lr, epoch_num, log_epoch
-        Encoder training hyperparameters.
-    use_neighbors, Ks, Kg, n_comps, alpha, beta, res, target_num, random_seed
-        Spatial clustering parameters.
-
-    Returns
-    -------
-    Dict with keys ``"sc_adata"``, ``"st_adata"``, ``"output_dir"``.
-    """
     bundle_dir = Path(bundle_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -131,7 +96,14 @@ def run_scspace_pipeline(
         st_meta_path=str(bundle.st_meta_path),
     )
 
-    # Preprocess
+    # Preprocess — auto‑clamp n_features to available gene count
+    n_genes = sc_adata.shape[1]
+    if n_features > n_genes:
+        print(f"n_features clamped from {n_features} → {n_genes} (only {n_genes} genes available)")
+        n_features = n_genes
+    if normalize and n_genes < 200:
+        print(f"Disabling normalization for small gene set ({n_genes} genes)")
+        normalize = False
     sc_adata, st_adata = preporcess(
         sc_adata, st_adata, st_type=st_type,
         n_features=n_features, normalize=normalize,
@@ -175,25 +147,7 @@ def prepare(
     st_meta: pd.DataFrame,
     output_dir: str | Path,
 ) -> ScSpaceBundlePaths:
-    """Create a bundle from pre-built DataFrames.
-
-    Parameters
-    ----------
-    sc_counts
-        Single-cell count matrix (cells × genes).
-    sc_meta
-        Single-cell metadata.
-    st_counts
-        Spatial count matrix (spots × genes).
-    st_meta
-        Spatial metadata.
-    output_dir
-        Output directory for the bundle.
-
-    Returns
-    -------
-    ScSpaceBundlePaths.
-    """
+    """Create a bundle from pre-built DataFrames."""
     sc_adata = ad.AnnData(X=sc_counts, obs=sc_meta)
     st_adata = ad.AnnData(X=st_counts, obs=st_meta)
     return bundle_files(sc_adata, st_adata, output_dir=output_dir)

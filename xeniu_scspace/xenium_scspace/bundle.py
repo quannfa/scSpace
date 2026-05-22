@@ -62,6 +62,15 @@ def bundle_files(
         columns=st_adata.obs_names,
     )
     st_meta = st_adata.obs.copy()
+    # Map coordinate column names to what scSpace.load_data expects (xcoord/ycoord)
+    coord_renames = {}
+    for col in st_meta.columns:
+        if col.lower() in ("x_center", "xcentroid", "x_centroid", "xcoord"):
+            coord_renames[col] = "xcoord"
+        elif col.lower() in ("y_center", "ycentroid", "y_centroid", "ycoord"):
+            coord_renames[col] = "ycoord"
+    if coord_renames:
+        st_meta = st_meta.rename(columns=coord_renames)
 
     paths = ScSpaceBundlePaths(
         sc_data_path=output_dir / f"{prefix}_sc_data.csv",
