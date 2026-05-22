@@ -48,6 +48,7 @@ def run_scspace_pipeline(
     st_type: str = "spot",
     n_features: int = 2000,
     normalize: bool = True,
+    normalize_coords: bool = True,
     kernel_type: str = "primal",
     dim: int = 50,
     lamb: int = 1,
@@ -95,6 +96,22 @@ def run_scspace_pipeline(
         st_data_path=str(bundle.st_data_path),
         st_meta_path=str(bundle.st_meta_path),
     )
+
+    # ── Coordinate normalisation ──────────────────────────────────────
+    # scSpace MLP trains to predict raw pixel coordinates (0-5500) from
+    # normalised TCA features.  The scale mismatch makes optimisation hard
+    # and frequently yields degenerate solutions (both pseudo-dims equal).
+    # We z-score the st spatial coordinates so that the target has unit
+    # variance; the pseudo-space can later be interpreted in the normalised
+    # frame.
+    coords_mean = coords_std = None
+    if normalize_coords:
+        spatial = st_adata.obsm["spatial"]
+        coords_mean = spatial.mean(axis=0)
+        coords_std = spatial.std(axis=0)
+        st_adata.obsm["spatial"] = (spatial - coords_mean) / coords_std
+        print(f"Normalised st spatial coords: mean=({coords_mean[0]:.1f}, {coords_mean[1]:.1f}), "
+              f"std=({coords_std[0]:.1f}, {coords_std[1]:.1f})")
 
     # Preprocess — auto‑clamp n_features to available gene count
     n_genes = sc_adata.shape[1]
