@@ -15,17 +15,10 @@ dependencies = [
     "scipy>=1.9.2",
     "torch>=2.11.0",
     "t20260507-xenium-dataset",
-    "xeniu-scspace",
 ]
 
 [tool.uv.extra-build-dependencies]
 leidenalg = ["cmake"]
 
 [tool.uv.sources]
-t20260507-xenium-dataset = { path = "../t20260507_xenium_dataset", editable = true }
-xeniu-scspace = { path = "xeniu_scspace", editable = true }
-
-[dependency-groups]
-dev = [
-    "pytest>=9.0.3",
-]
+t20260507-xenium-dataset = { path = "../../t20260507_xenium_dataset", editable = true }
